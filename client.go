@@ -162,7 +162,7 @@ func (c *Client) AcquireContext(ctx context.Context, name string, opts ...LockOp
 		case <-ctx.Done():
 			return nil, ErrNotAcquired
 		default:
-			err := c.retry(func() error { return c.tryAcquire(ctx, l) })
+			err := c.retry(func() error { return c.tryAcquire(ctx, l) }, l.name)
 			if l.failIfLocked && err == ErrNotAcquired {
 				c.log.Println("not acquired, exit")
 				return l, err
@@ -276,12 +276,16 @@ func (c *Client) Release(l *Lock) error {
 // ReleaseContext will update the mutex entry to be able to be taken by other
 // clients.
 func (c *Client) ReleaseContext(ctx context.Context, l *Lock) error {
+	c.log("Release Lock", l.name)
 	if l.IsReleased() {
+		c.log("Lock already released ", l.name)
 		l.heartbeatWG.Wait()
 		return ErrLockAlreadyReleased
 	}
-	err := c.retry(func() error { return c.storeRelease(ctx, l) })
+	err := c.retry(func() error { return c.storeRelease(ctx, l) }, l.name)
+	c.log("Released Lock", l.name)
 	if l.IsReleased() {
+		c.log("Waiting for stop Heartbeat", l.name)
 		l.heartbeatWG.Wait()
 	}
 	return err
@@ -314,6 +318,7 @@ func (c *Client) storeRelease(ctx context.Context, l *Lock) error {
 	} else if affected == 0 {
 		l.isReleased = true
 		l.heartbeatCancel()
+		c.log.Println("storeRelease ErrLockAlreadyReleased", l.name)
 		return ErrLockAlreadyReleased
 	}
 	if !l.keepOnRelease {
@@ -343,7 +348,7 @@ func (c *Client) heartbeat(ctx context.Context, l *Lock) {
 		if err := ctx.Err(); err != nil {
 			return
 		} else if err := c.SendHeartbeat(ctx, l); err != nil {
-			defer c.log.Println("heartbeat missed", err)
+			defer c.log.Println("heartbeat missed", err, l.name)
 			return
 		}
 		time.Sleep(c.heartbeatFrequency)
@@ -353,7 +358,7 @@ func (c *Client) heartbeat(ctx context.Context, l *Lock) {
 // SendHeartbeat refreshes the mutex entry so to avoid other clients from
 // grabbing it.
 func (c *Client) SendHeartbeat(ctx context.Context, l *Lock) error {
-	err := c.retry(func() error { return c.storeHeartbeat(ctx, l) })
+	err := c.retry(func() error { return c.storeHeartbeat(ctx, l) }, l.name)
 	if err != nil {
 		return fmt.Errorf("cannot send heartbeat (%v): %w", l.name, err)
 	}
@@ -431,7 +436,7 @@ func (c *Client) GetContext(ctx context.Context, name string) (*Lock, error) {
 		var err error
 		l, err = c.getLock(ctx, name)
 		return err
-	})
+	}, l.name)
 	if notExist := (&NotExistError{}); err != nil && errors.As(err, &notExist) {
 		c.log.Println("missing lock entry:", err)
 	}
@@ -469,14 +474,14 @@ func (c *Client) getNextRVN(ctx context.Context, tx *sql.Tx) (int64, error) {
 
 const maxRetries = 1024
 
-func (c *Client) retry(f func() error) error {
+func (c *Client) retry(f func() error, lname string) error {
 	var err error
 	for i := 0; i < maxRetries; i++ {
 		err = f()
 		if failedPrecondition := (&FailedPreconditionError{}); err == nil || !errors.As(err, &failedPrecondition) {
 			break
 		}
-		c.log.Println("bad transaction, retrying:", err)
+		c.log.Println("bad transaction, retrying:", lname)
 		time.Sleep(c.heartbeatFrequency)
 	}
 	return err
