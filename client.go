@@ -276,16 +276,16 @@ func (c *Client) Release(l *Lock) error {
 // ReleaseContext will update the mutex entry to be able to be taken by other
 // clients.
 func (c *Client) ReleaseContext(ctx context.Context, l *Lock) error {
-	c.log("Release Lock", l.name)
+	c.log.Println("Release Lock", l.name)
 	if l.IsReleased() {
-		c.log("Lock already released ", l.name)
+		c.log.Println("Lock already released ", l.name)
 		l.heartbeatWG.Wait()
 		return ErrLockAlreadyReleased
 	}
 	err := c.retry(func() error { return c.storeRelease(ctx, l) }, l.name)
-	c.log("Released Lock", l.name)
+	c.log.Println("Released Lock", l.name)
 	if l.IsReleased() {
-		c.log("Waiting for stop Heartbeat", l.name)
+		c.log.Println("Waiting for stop Heartbeat", l.name)
 		l.heartbeatWG.Wait()
 	}
 	return err

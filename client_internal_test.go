@@ -66,7 +66,7 @@ func TestRetry(t *testing.T) {
 			var err error
 			err, errs = errs[0], errs[1:]
 			return err
-		})
+		}, "test")
 		if otherErr := (&OtherError{}); !errors.As(err, &otherErr) {
 			t.Fatal("unexpected error kind found")
 		}
@@ -79,7 +79,7 @@ func TestRetry(t *testing.T) {
 		err := c.retry(func() error {
 			retries++
 			return &FailedPreconditionError{errors.New("failed precondition")}
-		})
+		}, "test")
 		if failedPreconditionErr := (&FailedPreconditionError{}); !errors.As(err, &failedPreconditionErr) {
 			t.Fatal("unexpected error kind found")
 		}

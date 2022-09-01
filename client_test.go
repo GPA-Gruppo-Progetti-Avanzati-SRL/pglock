@@ -24,12 +24,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/GPA-Gruppo-Progetti-Avanzati-SRL/pglock"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"cirello.io/pglock"
 	_ "github.com/jackc/pgx/v4/stdlib"
 	"github.com/lib/pq"
 )
