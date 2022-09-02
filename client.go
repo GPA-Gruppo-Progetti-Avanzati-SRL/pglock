@@ -360,6 +360,8 @@ func (c *Client) heartbeat(ctx context.Context, l *Lock) {
 // SendHeartbeat refreshes the mutex entry so to avoid other clients from
 // grabbing it.
 func (c *Client) SendHeartbeat(ctx context.Context, l *Lock) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	err := c.retry(func() error { return c.storeHeartbeat(ctx, l) }, l.name)
 	if err != nil {
 		return fmt.Errorf("cannot send heartbeat (%v): %w", l.name, err)
@@ -368,8 +370,7 @@ func (c *Client) SendHeartbeat(ctx context.Context, l *Lock) error {
 }
 
 func (c *Client) storeHeartbeat(ctx context.Context, l *Lock) error {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+
 	ctx, cancel := context.WithTimeout(ctx, l.leaseDuration)
 	defer cancel()
 	tx, err := c.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
@@ -474,7 +475,7 @@ func (c *Client) getNextRVN(ctx context.Context, tx *sql.Tx) (int64, error) {
 	return rvn, err
 }
 
-const maxRetries = 1024
+const maxRetries = 5
 
 func (c *Client) retry(f func() error, lname string) error {
 	var err error
