@@ -203,7 +203,7 @@ func (c *Client) storeAcquire(ctx context.Context, l *Lock) error {
 	if err != nil {
 		return typedError(err, "cannot create transaction for lock acquisition")
 	}
-	rvn, err := c.getNextRVN(ctx, tx)
+	rvn, err := c.getNextRVN(ctx, tx, l.name)
 	if err != nil {
 		return typedError(err, "cannot run query to read record version number")
 	}
@@ -360,6 +360,7 @@ func (c *Client) heartbeat(ctx context.Context, l *Lock) {
 // SendHeartbeat refreshes the mutex entry so to avoid other clients from
 // grabbing it.
 func (c *Client) SendHeartbeat(ctx context.Context, l *Lock) error {
+
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	err := c.retry(func() error { return c.storeHeartbeat(ctx, l) }, l.name)
@@ -378,7 +379,7 @@ func (c *Client) storeHeartbeat(ctx context.Context, l *Lock) error {
 		l.isReleased = true
 		return typedError(err, "cannot create transaction for lock acquisition")
 	}
-	rvn, err := c.getNextRVN(ctx, tx)
+	rvn, err := c.getNextRVN(ctx, tx, l.name)
 	if err != nil {
 		l.isReleased = true
 		return typedError(err, "cannot run query to read record version number")
@@ -468,8 +469,8 @@ func (c *Client) getLock(ctx context.Context, name string) (*Lock, error) {
 	return l, typedError(err, "cannot load the data of this lock")
 }
 
-func (c *Client) getNextRVN(ctx context.Context, tx *sql.Tx) (int64, error) {
-	rowRVN := tx.QueryRowContext(ctx, `SELECT nextval('`+c.tableName+`_rvn')`)
+func (c *Client) getNextRVN(ctx context.Context, tx *sql.Tx, name string) (int64, error) {
+	rowRVN := tx.QueryRowContext(ctx, `SELECT nextval('`+c.tableName+`_`+name+`_rvn')`)
 	var rvn int64
 	err := rowRVN.Scan(&rvn)
 	return rvn, err
