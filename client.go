@@ -25,6 +25,8 @@ import (
 	"log"
 	"math/rand"
 	"net"
+	"reflect"
+	"runtime"
 	"time"
 
 	"github.com/lib/pq"
@@ -481,10 +483,14 @@ func (c *Client) retry(f func() error, lname string) error {
 		if failedPrecondition := (&FailedPreconditionError{}); err == nil || !errors.As(err, &failedPrecondition) {
 			break
 		}
-		c.log.Println("bad transaction, retrying:", lname)
+		c.log.Println("bad transaction, retrying:", lname, GetFunctionName(f), err)
 		time.Sleep(c.heartbeatFrequency)
 	}
 	return err
+}
+
+func GetFunctionName(i interface{}) string {
+	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
 }
 
 // ClientOption reconfigures the lock client
