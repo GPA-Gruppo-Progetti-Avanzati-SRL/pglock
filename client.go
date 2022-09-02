@@ -239,7 +239,7 @@ func (c *Client) storeAcquire(ctx context.Context, l *Lock) error {
 	if err != nil {
 		return typedError(err, "cannot run query to acquire lock")
 	}
-	rowLockInfo := tx.QueryRowContext(ctx, `SELECT "record_version_number", "data", "owner" FROM `+c.tableName+` WHERE name = $1 FOR UPDATE`, l.name)
+	rowLockInfo := tx.QueryRowContext(ctx, `SELECT "record_version_number", "data", "owner" FROM `+c.tableName+` WHERE name = $1`, l.name)
 	var actualRVN int64
 	var data []byte
 	var actualOwner string
