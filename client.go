@@ -159,6 +159,14 @@ func (c *Client) Acquire(name string, opts ...LockOption) (*Lock, error) {
 // is canceled before the lock is acquired.
 func (c *Client) AcquireContext(ctx context.Context, name string, opts ...LockOption) (*Lock, error) {
 	l := c.newLock(ctx, name, opts)
+	c.log.Println("AcquireContext locking", l.name)
+	l.mu.Lock()
+	c.log.Println("AcquireContext locked", l.name)
+	defer func() {
+		c.log.Println("AcquireContext unlocking", l.name)
+		l.mu.Unlock()
+		c.log.Println("AcquireContext unlocked", l.name)
+	}()
 	for {
 		select {
 		case <-ctx.Done():
@@ -294,8 +302,14 @@ func (c *Client) ReleaseContext(ctx context.Context, l *Lock) error {
 }
 
 func (c *Client) storeRelease(ctx context.Context, l *Lock) error {
+	c.log.Println("storeRelease locking", l.name)
 	l.mu.Lock()
-	defer l.mu.Unlock()
+	c.log.Println("storeRelease locked", l.name)
+	defer func() {
+		c.log.Println("storeRelease unlocking", l.name)
+		l.mu.Unlock()
+		c.log.Println("storeRelease unlocked", l.name)
+	}()
 	ctx, cancel := context.WithTimeout(ctx, l.leaseDuration)
 	defer cancel()
 	tx, err := c.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
@@ -360,9 +374,15 @@ func (c *Client) heartbeat(ctx context.Context, l *Lock) {
 // SendHeartbeat refreshes the mutex entry so to avoid other clients from
 // grabbing it.
 func (c *Client) SendHeartbeat(ctx context.Context, l *Lock) error {
-
+	c.log.Println("SendHeartbeat locking", l.name)
 	l.mu.Lock()
-	defer l.mu.Unlock()
+	c.log.Println("SendHeartbeat locked", l.name)
+
+	defer func() {
+		c.log.Println("SendHeartbeat unlocking", l.name)
+		l.mu.Unlock()
+		c.log.Println("SendHeartbeat unlocked", l.name)
+	}()
 	err := c.retry(func() error { return c.storeHeartbeat(ctx, l) }, l.name)
 	if err != nil {
 		return fmt.Errorf("cannot send heartbeat (%v): %w", l.name, err)
